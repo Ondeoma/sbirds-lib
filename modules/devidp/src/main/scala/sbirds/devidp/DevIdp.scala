@@ -19,27 +19,22 @@ import java.time.Instant
 import java.util.Base64
 
 /** 発行した認可コード（60秒・1回だけ）. */
-final case class Grant(
-  clientId: String,
-  redirectUri: String,
-  challenge: String,
-  nonce: Option[String],
-  sub: String,
-  name: String,
-  email: String,
-  groups: List[String],
-  issuedAt: Instant)
+final case class Grant(clientId: String,
+                       redirectUri: String,
+                       challenge: String,
+                       nonce: Option[String],
+                       sub: String,
+                       name: String,
+                       email: String,
+                       groups: List[String],
+                       issuedAt: Instant)
 
 /**
  * 開発・テスト用の簡易 OIDC プロバイダ（本番では使わないこと）.
  * Authorization Code + PKCE（S256）で、名前・メールアドレス・グループを入力した人として ID トークン（RS256）を発行する.
  * discovery・JWKS・end_session_endpoint もあるので、本物の IdP と同じ手順でログイン・ログアウトを試せる.
  */
-final class DevIdp(
-  issuer: String,
-  clientId: String,
-  clientSecret: String,
-  codes: Ref[IO, Map[String, Grant]]) {
+final class DevIdp(issuer: String, clientId: String, clientSecret: String, codes: Ref[IO, Map[String, Grant]]) {
 
   private val enc = Base64.getUrlEncoder.withoutPadding()
   private val kid = "dev-" + Crypto.randomToken(6)
@@ -49,12 +44,8 @@ final class DevIdp(
     g.generateKeyPair()
   }
 
-  private def b64(
-    bytes: Array[Byte]
-  ): String = enc.encodeToString(bytes)
-  private def unsigned(
-    n: java.math.BigInteger
-  ): Array[Byte] = {
+  private def b64(bytes: Array[Byte]): String = enc.encodeToString(bytes)
+  private def unsigned(n: java.math.BigInteger): Array[Byte] = {
     val b = n.toByteArray
     if b.length > 1 && b(0) == 0 then b.drop(1) else b
   }
@@ -71,9 +62,7 @@ final class DevIdp(
     )))
   }
 
-  def sign(
-    claims: Json
-  ): String = {
+  def sign(claims: Json): String = {
     val header = Json.obj("alg" -> "RS256".asJson, "typ" -> "JWT".asJson, "kid" -> kid.asJson)
     val input = b64(header.noSpaces.getBytes(StandardCharsets.UTF_8)) + "." +
       b64(claims.noSpaces.getBytes(StandardCharsets.UTF_8))
@@ -83,9 +72,7 @@ final class DevIdp(
     input + "." + b64(s.sign())
   }
 
-  private def html(
-    body: String
-  ): IO[Response[IO]] =
+  private def html(body: String): IO[Response[IO]] =
     IO.pure(Response[IO](Status.Ok).withEntity(
       s"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
          |<title>開発用 IdP</title><style>body{font-family:system-ui,sans-serif;max-width:420px;margin:10vh auto;padding:0 1rem}
@@ -94,26 +81,17 @@ final class DevIdp(
     )(using EntityEncoder.stringEncoder)
       .withContentType(`Content-Type`(MediaType.text.html, Charset.`UTF-8`)))
 
-  private def esc(
-    s: String
-  ): String = s.flatMap {
+  private def esc(s: String): String = s.flatMap {
     case '<' => "&lt;"; case '>' => "&gt;"; case '&' => "&amp;"; case '"' => "&quot;"; case c => c.toString
   }
 
-  private def bad(
-    msg: String
-  ): IO[Response[IO]] = BadRequest(Json.obj("error" -> "invalid_request".asJson, "error_description" -> msg.asJson))
+  private def bad(msg: String): IO[Response[IO]] =
+    BadRequest(Json.obj("error" -> "invalid_request".asJson, "error_description" -> msg.asJson))
 
-  private def tokenError(
-    code: String,
-    status: Status = Status.BadRequest
-  ): IO[Response[IO]] =
+  private def tokenError(code: String, status: Status = Status.BadRequest): IO[Response[IO]] =
     IO.pure(Response[IO](status).withEntity(Json.obj("error" -> code.asJson)))
 
-  private def checkClient(
-    id: Option[String],
-    redirect: Option[String]
-  ): Either[String, (String, String)] =
+  private def checkClient(id: Option[String], redirect: Option[String]): Either[String, (String, String)] =
     (id, redirect) match {
       case (Some(c), Some(r))
           if c == clientId &&
@@ -164,9 +142,7 @@ final class DevIdp(
 
     case req @ POST -> Root / "authorize" =>
       req.as[UrlForm].flatMap { f =>
-        def v(
-          k: String
-        ) = f.getFirst(k).map(_.trim).filter(_.nonEmpty)
+        def v(k: String) = f.getFirst(k).map(_.trim).filter(_.nonEmpty)
         checkClient(v("client_id"), v("redirect_uri")) match {
           case Left(e) => bad(e)
           case Right((c, r)) =>
@@ -191,9 +167,7 @@ final class DevIdp(
 
     case req @ POST -> Root / "token" =>
       req.as[UrlForm].flatMap { f =>
-        def v(
-          k: String
-        ) = f.getFirst(k).map(_.trim).filter(_.nonEmpty)
+        def v(k: String) = f.getFirst(k).map(_.trim).filter(_.nonEmpty)
         val basic = req.headers.get[Authorization].collect { case Authorization(BasicCredentials(u, p)) => (u, p) }
         val client = basic.orElse((v("client_id"), v("client_secret")).tupled)
         if !client.contains((clientId, clientSecret)) then tokenError("invalid_client", Status.Unauthorized)
@@ -239,22 +213,14 @@ object DevIdp {
 
   private given org.typelevel.log4cats.LoggerFactory[IO] = org.typelevel.log4cats.noop.NoOpFactory[IO]
 
-  def create(
-    issuer: String,
-    clientId: String,
-    clientSecret: String
-  ): IO[DevIdp] =
+  def create(issuer: String, clientId: String, clientSecret: String): IO[DevIdp] =
     Ref.of[IO, Map[String, Grant]](Map.empty).map(new DevIdp(issuer.stripSuffix("/"), clientId, clientSecret, _))
 
   /**
    * 開発用の OIDC プロバイダを動かす（127.0.0.1 だけで待ち受ける）. 各サービスの devidp の main から呼ぶ.
    * DEVIDP_PORT・DEVIDP_ISSUER・DEVIDP_CLIENT_ID・DEVIDP_CLIENT_SECRET で上書きできる.
    */
-  def serve(
-    defaultPort: Int,
-    defaultClientId: String,
-    defaultSecret: String
-  ): IO[Unit] = {
+  def serve(defaultPort: Int, defaultClientId: String, defaultSecret: String): IO[Unit] = {
     val port = sys.env.get("DEVIDP_PORT").flatMap(_.toIntOption).getOrElse(defaultPort)
     val issuer = sys.env.getOrElse("DEVIDP_ISSUER", s"http://localhost:$port")
     for {

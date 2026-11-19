@@ -37,19 +37,14 @@ object Pwa {
     dom.window.matchMedia("(display-mode: standalone)").matches ||
       nav.standalone.asInstanceOf[js.UndefOr[Boolean]].contains(true)
 
-  private def bytes(
-    b64: String
-  ): Uint8Array = {
+  private def bytes(b64: String): Uint8Array = {
     val s = dom.window.atob(b64.replace('-', '+').replace('_', '/') + "=" * ((4 - b64.length % 4) % 4))
     val a = new Uint8Array(s.length)
     s.indices.foreach(i => a(i) = s.charAt(i).toShort)
     a
   }
 
-  private def sameKey(
-    sub: js.Dynamic,
-    key: Uint8Array
-  ): Boolean = {
+  private def sameKey(sub: js.Dynamic, key: Uint8Array): Boolean = {
     val k = sub.options.applicationServerKey
     if (js.isUndefined(k) || k == null) true
     else {

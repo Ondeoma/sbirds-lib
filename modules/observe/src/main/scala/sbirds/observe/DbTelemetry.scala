@@ -29,21 +29,15 @@ object DbTelemetry {
       )
 
   /** SQL の種類と表（スパンの名前・メトリクスのラベル）. */
-  def describe(
-    sql: String
-  ): (String, Option[String]) = {
+  def describe(sql: String): (String, Option[String]) = {
     val op = Op.findFirstMatchIn(sql).map(_.group(1).toUpperCase).getOrElse("SQL")
     (op, Table.findFirstMatchIn(sql).map(_.group(1).toLowerCase))
   }
 
-  private def compact(
-    sql: String
-  ): String = sql.replaceAll("\\s+", " ").trim.take(2000)
+  private def compact(sql: String): String = sql.replaceAll("\\s+", " ").trim.take(2000)
 
   val logHandler: LogHandler[IO] = new LogHandler[IO] {
-    def run(
-      e: LogEvent
-    ): IO[Unit] = {
+    def run(e: LogEvent): IO[Unit] = {
       val (dur, err) = e match {
         case Success(_, _, _, exec, proc) => (exec + proc, None)
         case ProcessingFailure(_, _, _, exec, proc, t) => (exec + proc, Some(t))

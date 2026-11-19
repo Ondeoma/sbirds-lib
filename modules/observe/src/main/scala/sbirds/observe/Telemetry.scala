@@ -18,9 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.jdk.CollectionConverters.*
 
 /** 操作したユーザー（ログ・トレース・メトリクスに載せる）. */
-final case class Actor(
-  id: String,
-  name: String)
+final case class Actor(id: String, name: String)
 
 /**
  * OpenTelemetry（otel4s-oteljava）. ログ・メトリクス・トレースを OTLP で skorimako などに送る.
@@ -31,11 +29,10 @@ final case class Actor(
  * トレースの文脈は IOLocal に持ち（IOLocalContextStorage）、Java のライブラリ（logback）からも同じ文脈が見える.
  * そのため、ログにトレースの ID・操作したユーザーが付く.
  */
-final class Telemetry private[observe] (
-  val tracer: Tracer[IO],
-  val meter: Meter[IO],
-  val baggage: BaggageManager[IO],
-  val enabled: Boolean)
+final class Telemetry private[observe] (val tracer: Tracer[IO],
+                                        val meter: Meter[IO],
+                                        val baggage: BaggageManager[IO],
+                                        val enabled: Boolean)
 
 object Telemetry {
 
@@ -60,11 +57,7 @@ object Telemetry {
    * 起動する. service はサービスの名前（`OTEL_SERVICE_NAME` があればそちら）、version はリソースの service.version.
    * 送り先がないときも作る（ログのユーザー・トレースの ID の仕組みは同じに動き、送らないだけ）.
    */
-  def resource(
-    service: String,
-    version: String,
-    runtime: IORuntime
-  ): Resource[IO, Telemetry] = {
+  def resource(service: String, version: String, runtime: IORuntime): Resource[IO, Telemetry] = {
     given LocalProvider[IO, Context] = IOLocalContextStorage.localProvider[IO]
     val env = sys.env
     val enabled = env.get("OTEL_EXPORTER_OTLP_ENDPOINT").exists(_.trim.nonEmpty) &&
@@ -110,12 +103,7 @@ object Telemetry {
    * 操作したユーザーを、いまのスパンの属性（user.id・user.name）と、この中で出すログ（MDC の baggage.user.id・baggage.user.name）に載せる.
    * 各サービスの authed（ログインの確認）で、処理の本体をこれで囲む.
    */
-  def withUser[A](
-    id: String,
-    name: String
-  )(
-    fa: IO[A]
-  ): IO[A] = {
+  def withUser[A](id: String, name: String)(fa: IO[A]): IO[A] = {
     val t = cur
     actorSlot.get.flatMap(_.traverse_(r => IO(r.set(Some(Actor(id, name)))))) *>
       t.tracer.currentSpanOrNoop.flatMap(_.addAttributes(List(
@@ -129,67 +117,34 @@ object Telemetry {
    * 処理をスパンで囲む（トレースの内訳に出る）. いまのスパンがあればその子、なければ新しいトレース（裏の処理の1件など）.
    * 例: `Telemetry.span("task.create", "task.id" -> id.toString)(io)`
    */
-  def span[A](
-    name: String,
-    kv: (String, String)*
-  )(
-    fa: IO[A]
-  ): IO[A] =
-    cur.tracer.spanBuilder(name).addAttributes(kv.map(
-      (
-        k,
-        v
-      ) => Attribute(k, v)
-    )).build.use { s =>
+  def span[A](name: String, kv: (String, String)*)(fa: IO[A]): IO[A] =
+    cur.tracer.spanBuilder(name).addAttributes(kv.map((k, v) => Attribute(k, v))).build.use { s =>
       fa.onError(e =>
         s.recordException(e) *> s.setStatus(org.typelevel.otel4s.trace.StatusCode.Error, e.getClass.getSimpleName)
       )
     }
 
   /** いまのスパンに利用者を付ける（withUser で包めないところ向け）. */
-  def tagUser(
-    id: String,
-    name: String
-  ): IO[Unit] =
+  def tagUser(id: String, name: String): IO[Unit] =
     cur.tracer.currentSpanOrNoop.flatMap(_.addAttributes(List(Attribute("user.id", id), Attribute("user.name", name))))
 
   /**
    * スレッドで動く同期の処理（SMTP・IMAP・POP3 のセッションなど）のためのスパン. Resource を開いている間がスパンの長さ.
    * within で包んだ IO（DB など）は、このスパンの子になる.
    */
-  def open(
-    name: String,
-    kv: (String, String)*
-  ): Resource[IO, OpenSpan] =
-    cur.tracer.spanBuilder(name).addAttributes(kv.map(
-      (
-        k,
-        v
-      ) => Attribute(k, v)
-    )).build.resource.map(new OpenSpan(_))
+  def open(name: String, kv: (String, String)*): Resource[IO, OpenSpan] =
+    cur.tracer.spanBuilder(name).addAttributes(kv.map((k, v) => Attribute(k, v))).build.resource.map(new OpenSpan(_))
 }
 
 /** Telemetry.open で開いたスパン. */
-final class OpenSpan private[observe] (
-  res: org.typelevel.otel4s.trace.SpanOps.Res[IO]) {
+final class OpenSpan private[observe] (res: org.typelevel.otel4s.trace.SpanOps.Res[IO]) {
   private def span = res.span
 
   /** io をこのスパンの子として動かす. */
-  def within[A](
-    io: IO[A]
-  ): IO[A] = res.trace(io)
+  def within[A](io: IO[A]): IO[A] = res.trace(io)
 
-  def addAttributes(
-    kv: (String, String)*
-  ): IO[Unit] = span.addAttributes(kv.map(
-    (
-      k,
-      v
-    ) => Attribute(k, v)
-  ))
+  def addAttributes(kv: (String, String)*): IO[Unit] = span.addAttributes(kv.map((k, v) => Attribute(k, v)))
 
-  def fail(
-    e: Throwable
-  ): IO[Unit] =
+  def fail(e: Throwable): IO[Unit] =
     span.recordException(e) *> span.setStatus(org.typelevel.otel4s.trace.StatusCode.Error, e.getClass.getSimpleName)
 }

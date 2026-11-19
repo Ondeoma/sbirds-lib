@@ -18,14 +18,9 @@ import scala.concurrent.duration.*
  * keepOwner: true なら、別のユーザーがすでに購読している端末（endpoint）を上書きしない（乗っ取りを防ぐ）.
  * maxPerUser: ユーザーごとの購読の上限（古いものから消す）.
  */
-final class PushStore(
-  xa: Transactor[IO],
-  keepOwner: Boolean = false,
-  maxPerUser: Option[Int] = None) {
+final class PushStore(xa: Transactor[IO], keepOwner: Boolean = false, maxPerUser: Option[Int] = None) {
 
-  private def tx[A](
-    c: ConnectionIO[A]
-  ): IO[A] = c.transact(xa)
+  private def tx[A](c: ConnectionIO[A]): IO[A] = c.transact(xa)
 
   /** VAPID の鍵. なければ作って保存する（複数ノードで同時に起動しても1つに決まる）. */
   def vapidKeys: IO[VapidKeys] = {
@@ -37,11 +32,7 @@ final class PushStore(
     ).map(VapidKeys.apply.tupled)
   }
 
-  def subscribe(
-    userId: UUID,
-    s: Subscription,
-    userAgent: Option[String]
-  ): IO[Unit] = {
+  def subscribe(userId: UUID, s: Subscription, userAgent: Option[String]): IO[Unit] = {
     val insert =
       sql"""insert into push_subscription (id, user_id, endpoint, p256dh, auth, user_agent) values (${UUID.randomUUID()}, $userId, ${s.endpoint}, ${s.p256dh}, ${s.auth}, $userAgent)"""
     val upsert =
@@ -60,64 +51,40 @@ final class PushStore(
     tx(upsert.update.run *> limit)
   }
 
-  def unsubscribe(
-    userId: UUID,
-    endpoint: String
-  ): IO[Unit] =
+  def unsubscribe(userId: UUID, endpoint: String): IO[Unit] =
     tx(sql"delete from push_subscription where user_id = $userId and endpoint = $endpoint".update.run.void)
 
-  def forUser(
-    userId: UUID
-  ): IO[List[Subscription]] =
+  def forUser(userId: UUID): IO[List[Subscription]] =
     tx(sql"select endpoint, p256dh, auth from push_subscription where user_id = $userId".query[Subscription].to[List])
 
-  def count(
-    userId: UUID
-  ): IO[Int] =
+  def count(userId: UUID): IO[Int] =
     tx(sql"select count(*) from push_subscription where user_id = $userId".query[Int].unique)
 
   /** プッシュのサービスが「もう無い」と答えた購読を消す. */
-  def remove(
-    endpoint: String
-  ): IO[Unit] = tx(sql"delete from push_subscription where endpoint = $endpoint".update.run.void)
+  def remove(endpoint: String): IO[Unit] =
+    tx(sql"delete from push_subscription where endpoint = $endpoint".update.run.void)
 
-  def touch(
-    endpoint: String
-  ): IO[Unit] = tx(sql"update push_subscription set last_used_at = now() where endpoint = $endpoint".update.run.void)
+  def touch(endpoint: String): IO[Unit] =
+    tx(sql"update push_subscription set last_used_at = now() where endpoint = $endpoint".update.run.void)
 }
 
 /** 通知の中身（Service Worker の push で表示する）. url は開くページ（同じサイトのパス）、tag は同じものをまとめる印. */
-final case class PushMessage(
-  title: String,
-  body: String,
-  url: String,
-  tag: Option[String] = None)
+final case class PushMessage(title: String, body: String, url: String, tag: Option[String] = None)
 
 /**
  * プッシュ通知を送る. VAPID の subject は `VAPID_SUBJECT`（`mailto:` か `https:`. 省略すると公開 URL）.
  * 送れなかった購読（404・410）は消す. 失敗しても呼び出し元の処理は止めない.
  */
-final class PushService(
-  store: PushStore,
-  http: Client[IO],
-  keys: VapidKeys,
-  subject: String,
-  service: String) {
+final class PushService(store: PushStore, http: Client[IO], keys: VapidKeys, subject: String, service: String) {
 
   def publicKey: String = keys.publicKey
 
-  def send(
-    userId: UUID,
-    m: PushMessage
-  ): IO[Unit] =
+  def send(userId: UUID, m: PushMessage): IO[Unit] =
     sbirds.observe.Telemetry.span("push.send")(store.forUser(userId).flatMap(_.traverse_(s =>
       deliver(s, m)
     ))).handleErrorWith(e => sbirds.observe.Log.warn(s"push failed: $e"))
 
-  private def deliver(
-    s: Subscription,
-    m: PushMessage
-  ): IO[Unit] =
+  private def deliver(s: Subscription, m: PushMessage): IO[Unit] =
     if !WebPush.allowedEndpoint(s.endpoint) then store.remove(s.endpoint)
     else {
       val payload = Json.obj(
@@ -155,12 +122,7 @@ final class PushService(
 
 object PushService {
 
-  def create(
-    store: PushStore,
-    http: Client[IO],
-    publicUrl: String,
-    service: String
-  ): IO[PushService] =
+  def create(store: PushStore, http: Client[IO], publicUrl: String, service: String): IO[PushService] =
     store.vapidKeys.map { k =>
       val subject = sys.env.get("VAPID_SUBJECT").map(_.trim).filter(s =>
         s.startsWith("mailto:") || s.startsWith("https://")

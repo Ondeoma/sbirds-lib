@@ -18,14 +18,10 @@ object AppNames {
   private var service: String = ""
 
   /** 起動時にサービス自身の名前（slug. 例: "skea"）を決める. */
-  def init(
-    slug: String
-  ): Unit = { service = slug }
+  def init(slug: String): Unit = { service = slug }
 
   /** /api/me の appNames を入れる. タブの題名も自身の表示名にする. */
-  def set(
-    m: Map[String, String]
-  ): Unit = {
+  def set(m: Map[String, String]): Unit = {
     names := m
     val s = selfOf(m)
     ScalactiveConfig.titleTemplate = "%s | " + s
@@ -33,38 +29,26 @@ object AppNames {
     if (service.nonEmpty && s != service) dom.document.title = dom.document.title.replace(service, s)
   }
 
-  private def selfOf(
-    m: Map[String, String]
-  ): String = m.get("_self").orElse(m.get(service)).filter(_.trim.nonEmpty).getOrElse(service)
+  private def selfOf(m: Map[String, String]): String =
+    m.get("_self").orElse(m.get(service)).filter(_.trim.nonEmpty).getOrElse(service)
 
   /** このサービス自身の表示名（ヘッダーなど）. */
   def self: CRV[String] = names.mapC(selfOf)
 
   /** slug のアプリの表示名（例: of("stui")）. */
-  def of(
-    slug: String
-  ): CRV[String] = names.mapC(m => nameIn(m, slug))
+  def of(slug: String): CRV[String] = names.mapC(m => nameIn(m, slug))
 
   /** いまの値（Scala のコードで文言に入れるとき）. */
-  def nameOf(
-    slug: String
-  ): String = nameIn(names.v, slug)
+  def nameOf(slug: String): String = nameIn(names.v, slug)
 
   def selfName: String = selfOf(names.v)
 
   /** このサービス自身のロゴの URL（なければ default. 例: logo("/logo.svg")）. */
-  def logo(
-    default: String
-  ): CRV[String] = names.mapC(m => m.get("_logo:_self").orElse(m.get("_logo:" + service)).getOrElse(default))
+  def logo(default: String): CRV[String] =
+    names.mapC(m => m.get("_logo:_self").orElse(m.get("_logo:" + service)).getOrElse(default))
 
   /** slug のアプリのロゴの URL（なければ default）. */
-  def logoOf(
-    slug: String,
-    default: String
-  ): CRV[String] = names.mapC(_.getOrElse("_logo:" + slug, default))
+  def logoOf(slug: String, default: String): CRV[String] = names.mapC(_.getOrElse("_logo:" + slug, default))
 
-  private def nameIn(
-    m: Map[String, String],
-    slug: String
-  ): String = m.get(slug).filter(_.trim.nonEmpty).getOrElse(slug)
+  private def nameIn(m: Map[String, String], slug: String): String = m.get(slug).filter(_.trim.nonEmpty).getOrElse(slug)
 }

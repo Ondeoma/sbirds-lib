@@ -12,19 +12,14 @@ import javax.crypto.spec.{GCMParameterSpec, SecretKeySpec}
 /** ブラウザ（受け取る側）と同じ手順で復号して、暗号化と VAPID の署名を確かめる. */
 class WebPushSpec extends munit.FunSuite {
 
-  private def hmac(
-    k: Array[Byte],
-    d: Array[Byte]
-  ) = { val m = Mac.getInstance("HmacSHA256"); m.init(new SecretKeySpec(k, "HmacSHA256")); m.doFinal(d) }
-  private def hkdf(
-    salt: Array[Byte],
-    ikm: Array[Byte],
-    info: Array[Byte],
-    n: Int
-  ) = hmac(hmac(salt, ikm), info ++ Array[Byte](1)).take(n)
-  private def u32(
-    b: BigInteger
-  ) = { val a = b.toByteArray; if a.length >= 32 then a.takeRight(32) else Array.fill[Byte](32 - a.length)(0) ++ a }
+  private def hmac(k: Array[Byte], d: Array[Byte]) = {
+    val m = Mac.getInstance("HmacSHA256"); m.init(new SecretKeySpec(k, "HmacSHA256")); m.doFinal(d)
+  }
+  private def hkdf(salt: Array[Byte], ikm: Array[Byte], info: Array[Byte], n: Int) =
+    hmac(hmac(salt, ikm), info ++ Array[Byte](1)).take(n)
+  private def u32(b: BigInteger) = {
+    val a = b.toByteArray; if a.length >= 32 then a.takeRight(32) else Array.fill[Byte](32 - a.length)(0) ++ a
+  }
 
   test("aes128gcm の本文を受け取る側の鍵で復号できる") {
     val g = KeyPairGenerator.getInstance("EC"); g.initialize(new ECGenParameterSpec("secp256r1"))

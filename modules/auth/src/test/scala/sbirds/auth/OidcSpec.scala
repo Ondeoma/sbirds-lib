@@ -12,16 +12,11 @@ import java.util.Base64
 class OidcSpec extends munit.FunSuite {
 
   private val enc = Base64.getUrlEncoder.withoutPadding()
-  private def b64(
-    b: Array[Byte]
-  ) = enc.encodeToString(b)
-  private def unsigned(
-    n: java.math.BigInteger
-  ) = { val b = n.toByteArray; if b.length > 1 && b(0) == 0 then b.drop(1) else b }
-  private def pad(
-    b: Array[Byte],
-    n: Int
-  ) = Array.fill[Byte](math.max(0, n - b.length))(0) ++ b
+  private def b64(b: Array[Byte]) = enc.encodeToString(b)
+  private def unsigned(n: java.math.BigInteger) = {
+    val b = n.toByteArray; if b.length > 1 && b(0) == 0 then b.drop(1) else b
+  }
+  private def pad(b: Array[Byte], n: Int) = Array.fill[Byte](math.max(0, n - b.length))(0) ++ b
 
   private val cfg = OidcConfig(
     "https://idp.example.com",
@@ -30,28 +25,19 @@ class OidcSpec extends munit.FunSuite {
     "https://cal.example.com/auth/callback"
   )
   private val now = Instant.parse("2026-11-15T00:00:00Z")
-  private def claims(
-    nonce: String = "n1",
-    aud: Json = "skakapo".asJson,
-    exp: Long = now.getEpochSecond + 300
-  ) = Json.obj(
-    "iss" -> cfg.issuer.asJson,
-    "sub" -> "u1".asJson,
-    "aud" -> aud,
-    "exp" -> exp.asJson,
-    "nonce" -> nonce.asJson,
-    "name" -> "山田".asJson,
-    "email" -> "y@example.com".asJson,
-    "groups" -> List("staff").asJson
-  )
+  private def claims(nonce: String = "n1", aud: Json = "skakapo".asJson, exp: Long = now.getEpochSecond + 300) =
+    Json.obj(
+      "iss" -> cfg.issuer.asJson,
+      "sub" -> "u1".asJson,
+      "aud" -> aud,
+      "exp" -> exp.asJson,
+      "nonce" -> nonce.asJson,
+      "name" -> "山田".asJson,
+      "email" -> "y@example.com".asJson,
+      "groups" -> List("staff").asJson
+    )
 
-  private def jwt(
-    alg: String,
-    kid: String,
-    payload: Json
-  )(
-    sign: Array[Byte] => Array[Byte]
-  ): String = {
+  private def jwt(alg: String, kid: String, payload: Json)(sign: Array[Byte] => Array[Byte]): String = {
     val input = b64(Json.obj("alg" -> alg.asJson, "kid" -> kid.asJson).noSpaces.getBytes(StandardCharsets.UTF_8)) +
       "." +
       b64(payload.noSpaces.getBytes(StandardCharsets.UTF_8))
@@ -69,10 +55,7 @@ class OidcSpec extends munit.FunSuite {
       "e" -> b64(unsigned(p.getPublicExponent)).asJson
     )
   }
-  private def rs256(
-    payload: Json,
-    kid: String = "r1"
-  ) = jwt("RS256", kid, payload) { in =>
+  private def rs256(payload: Json, kid: String = "r1") = jwt("RS256", kid, payload) { in =>
     val s = Signature.getInstance("SHA256withRSA"); s.initSign(rsa.getPrivate); s.update(in); s.sign()
   }
 

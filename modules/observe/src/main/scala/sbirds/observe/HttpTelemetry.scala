@@ -22,13 +22,8 @@ import scala.concurrent.duration.*
 object HttpTelemetry {
 
   private given TextMapGetter[Headers] with {
-    def get(
-      carrier: Headers,
-      key: String
-    ): Option[String] = carrier.get(CIString(key)).map(_.head.value)
-    def keys(
-      carrier: Headers
-    ): Iterable[String] = carrier.headers.map(_.name.toString)
+    def get(carrier: Headers, key: String): Option[String] = carrier.get(CIString(key)).map(_.head.value)
+    def keys(carrier: Headers): Iterable[String] = carrier.headers.map(_.name.toString)
   }
 
   private val accessLog = org.slf4j.LoggerFactory.getLogger("access")
@@ -38,9 +33,7 @@ object HttpTelemetry {
   private val Token = "^[A-Za-z0-9_\\-.~%]{24,}$".r
 
   /** /api/tasks/0b3c…/comments → /api/tasks/{id}/comments */
-  def route(
-    path: String
-  ): String =
+  def route(path: String): String =
     path.split('/').map { seg =>
       if Uuid.matches(seg) || Num.matches(seg) || Token.matches(seg) then "{id}" else seg
     }.mkString("/") match {
@@ -49,9 +42,7 @@ object HttpTelemetry {
     }
 
   /** ログ・スパンに残すパス. 長いトークン（受信 Webhook の秘密の URL など）は伏せる（UUID・数字は残す） */
-  def masked(
-    path: String
-  ): String =
+  def masked(path: String): String =
     path.split('/').map(seg => if !Uuid.matches(seg) && Token.matches(seg) then "***" else seg).mkString("/")
 
   private val buckets = BucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10)
@@ -60,17 +51,14 @@ object HttpTelemetry {
    * traced: スパン・メトリクス・アクセスログの対象にするパスの先頭（例: List("/api", "/auth")）.
    * それ以外（画面のファイル・/healthz）は何もしない.
    */
-  def apply(
-    app: HttpApp[IO],
-    traced: List[String],
-    clientIp: Request[IO] => Option[String] = defaultClientIp
-  ): Resource[IO, HttpApp[IO]] = middleware(traced, clientIp).map(_(app))
+  def apply(app: HttpApp[IO],
+            traced: List[String],
+            clientIp: Request[IO] => Option[String] = defaultClientIp): Resource[IO, HttpApp[IO]] =
+    middleware(traced, clientIp).map(_(app))
 
   /** apply と同じ処理を、あとから HttpApp に付けられる形で返す（ルートを組み立てる前に用意したいとき）. */
-  def middleware(
-    traced: List[String],
-    clientIp: Request[IO] => Option[String] = defaultClientIp
-  ): Resource[IO, HttpApp[IO] => HttpApp[IO]] =
+  def middleware(traced: List[String],
+                 clientIp: Request[IO] => Option[String] = defaultClientIp): Resource[IO, HttpApp[IO] => HttpApp[IO]] =
     Resource.eval(Telemetry.current.meter.histogram[Double]("http.server.request.duration").withUnit("s")
       .withDescription("HTTP の要求の処理にかかった時間").withExplicitBucketBoundaries(buckets).create).map { hist => app =>
       Kleisli { (req: Request[IO]) =>
@@ -80,13 +68,11 @@ object HttpTelemetry {
       }
     }
 
-  private def serve(
-    app: HttpApp[IO],
-    req: Request[IO],
-    path: String,
-    hist: Histogram[IO, Double],
-    clientIp: Request[IO] => Option[String]
-  ): IO[Response[IO]] = {
+  private def serve(app: HttpApp[IO],
+                    req: Request[IO],
+                    path: String,
+                    hist: Histogram[IO, Double],
+                    clientIp: Request[IO] => Option[String]): IO[Response[IO]] = {
     val t = Telemetry.current
     val method = req.method.name
     val rt = route(path)
@@ -128,20 +114,16 @@ object HttpTelemetry {
   }
 
   /** 既定の利用者の IP: X-Forwarded-For の先頭（なければ接続元）. 信頼できるプロキシだけを使うサービスは、apply に別の関数を渡す. */
-  def defaultClientIp(
-    req: Request[IO]
-  ): Option[String] =
+  def defaultClientIp(req: Request[IO]): Option[String] =
     req.headers.get(CIString("X-Forwarded-For")).map(_.head.value.split(',').head.trim).filter(_.nonEmpty)
       .orElse(req.remote.map(_.host.toString))
 
-  private def log(
-    method: String,
-    path: String,
-    status: Int,
-    dur: FiniteDuration,
-    actor: Option[Actor],
-    err: Option[Throwable]
-  ): Unit = {
+  private def log(method: String,
+                  path: String,
+                  status: Int,
+                  dur: FiniteDuration,
+                  actor: Option[Actor],
+                  err: Option[Throwable]): Unit = {
     val ms = dur.toMillis
     val ev =
       if status >= 500 then accessLog.atWarn() else accessLog.atInfo()

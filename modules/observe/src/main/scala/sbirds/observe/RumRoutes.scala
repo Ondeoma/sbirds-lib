@@ -15,10 +15,7 @@ import org.http4s.dsl.io.*
  */
 object RumRoutes {
 
-  final case class RumConfig(
-    endpoint: String,
-    token: String,
-    sampleRate: Double)
+  final case class RumConfig(endpoint: String, token: String, sampleRate: Double)
 
   def fromEnv: Option[RumConfig] = {
     val env = sys.env.view.mapValues(_.trim).filter(_._2.nonEmpty).toMap

@@ -8,8 +8,7 @@ import scala.scalajs.js
  * API の日時（ISO 8601 の文字列）. 画面(Scala.js)では java.time を使わない
  * （scala-java-time は出力が大きいため. 表示は js.Date で行う）.
  */
-final case class Timestamp(
-  iso: String) {
+final case class Timestamp(iso: String) {
 
   def toDate: js.Date = new js.Date(iso)
 

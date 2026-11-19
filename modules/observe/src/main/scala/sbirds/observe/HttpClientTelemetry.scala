@@ -18,16 +18,10 @@ import org.typelevel.otel4s.trace.{SpanKind, StatusCode}
 object HttpClientTelemetry {
 
   private given TextMapUpdater[Headers] with {
-    def updated(
-      carrier: Headers,
-      key: String,
-      value: String
-    ): Headers = carrier.put(Header.Raw(CIString(key), value))
+    def updated(carrier: Headers, key: String, value: String): Headers = carrier.put(Header.Raw(CIString(key), value))
   }
 
-  def apply(
-    client: Client[IO]
-  ): Client[IO] = Client[IO] { req =>
+  def apply(client: Client[IO]): Client[IO] = Client[IO] { req =>
     val t = Telemetry.current
     Resource.eval(t.tracer.currentSpanContext).flatMap {
       case Some(parent) if parent.isValid =>

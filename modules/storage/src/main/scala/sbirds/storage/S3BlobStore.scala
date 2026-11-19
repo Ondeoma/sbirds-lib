@@ -22,15 +22,9 @@ final case class S3Config(
 )
 
 /** S3互換ストレージの実装。AWS SDKの同期クライアントを blocking プールで使う。 */
-final class S3BlobStore private (
-  client: S3Client,
-  bucket: String) extends BlobStore {
+final class S3BlobStore private (client: S3Client, bucket: String) extends BlobStore {
 
-  def put(
-    key: String,
-    file: Path,
-    contentType: String
-  ): IO[Unit] =
+  def put(key: String, file: Path, contentType: String): IO[Unit] =
     IO.blocking {
       client.putObject(
         PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType).build(),
@@ -38,9 +32,7 @@ final class S3BlobStore private (
       )
     }.void
 
-  def get(
-    key: String
-  ): IO[Option[(BlobMeta, Stream[IO, Byte])]] =
+  def get(key: String): IO[Option[(BlobMeta, Stream[IO, Byte])]] =
     IO.blocking(client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build()))
       .map { in =>
         val r = in.response()
@@ -49,15 +41,10 @@ final class S3BlobStore private (
       }
       .recover { case _: NoSuchKeyException => None }
 
-  def delete(
-    key: String
-  ): IO[Unit] =
+  def delete(key: String): IO[Unit] =
     IO.blocking(client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build())).void
 
-  def copy(
-    from: String,
-    to: String
-  ): IO[Boolean] =
+  def copy(from: String, to: String): IO[Boolean] =
     IO.blocking {
       client.copyObject(CopyObjectRequest.builder().sourceBucket(
         bucket
@@ -73,9 +60,7 @@ final class S3BlobStore private (
 }
 
 object S3BlobStore {
-  def resource(
-    cfg: S3Config
-  ): Resource[IO, S3BlobStore] =
+  def resource(cfg: S3Config): Resource[IO, S3BlobStore] =
     Resource
       .fromAutoCloseable(IO.blocking {
         S3Client

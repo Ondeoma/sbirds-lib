@@ -11,23 +11,13 @@ object Backdrop {
   // 押し始めから離すまで、ずっと背景の上だったか
   private var onSelf = false
 
-  private def self(
-    e: dom.Event
-  ): Boolean = e.target == e.currentTarget
+  private def self(e: dom.Event): Boolean = e.target == e.currentTarget
 
-  def down(
-    e: dom.Event
-  ): Unit = onSelf = self(e)
+  def down(e: dom.Event): Unit = onSelf = self(e)
 
-  def up(
-    e: dom.Event
-  ): Unit = onSelf = onSelf && self(e)
+  def up(e: dom.Event): Unit = onSelf = onSelf && self(e)
 
-  def click(
-    e: dom.Event
-  )(
-    close: => Unit
-  ): Unit = {
+  def click(e: dom.Event)(close: => Unit): Unit = {
     if (onSelf && self(e)) close
     onSelf = false
   }

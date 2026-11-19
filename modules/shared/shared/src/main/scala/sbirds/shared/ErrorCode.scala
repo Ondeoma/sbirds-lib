@@ -22,10 +22,7 @@ trait ErrorCode {
 }
 
 /** sbirds-lib の中で使うエラーコード（SBL-xxxx）. */
-enum LibErrorCode(
-  val code: String,
-  val status: Int,
-  val message: String) extends ErrorCode {
+enum LibErrorCode(val code: String, val status: Int, val message: String) extends ErrorCode {
   case BadBody extends LibErrorCode("SBL-1001", 400, "リクエストの内容が正しくありません")
   case NotLoggedIn extends LibErrorCode("SBL-1002", 401, "ログインしてください")
   case CrossSite extends LibErrorCode("SBL-1003", 403, "別のサイトからの要求は受け付けません")
@@ -38,17 +35,12 @@ enum LibErrorCode(
  * 発生したエラー（コードと、その場の文言）. 処理の結果（Either の Left）や例外として運ぶ.
  * detail を省くとコードの既定の文言になる.
  */
-final case class AppError(
-  code: ErrorCode,
-  detail: Option[String] = None,
-  cause: Option[Throwable] = None) extends Exception(detail.getOrElse(code.message), cause.orNull) {
+final case class AppError(code: ErrorCode, detail: Option[String] = None, cause: Option[Throwable] = None)
+  extends Exception(detail.getOrElse(code.message), cause.orNull) {
   def message: String = detail.getOrElse(code.message)
   def status: Int = code.status
 }
 
 object AppError {
-  def apply(
-    code: ErrorCode,
-    detail: String
-  ): AppError = AppError(code, Some(detail))
+  def apply(code: ErrorCode, detail: String): AppError = AppError(code, Some(detail))
 }

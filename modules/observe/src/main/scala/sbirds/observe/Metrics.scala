@@ -20,17 +20,11 @@ object Metrics {
   private val upDowns = Ref.unsafe[IO, Map[String, UpDownCounter[IO, Long]]](Map.empty)
   private val histograms = Ref.unsafe[IO, Map[String, Histogram[IO, Double]]](Map.empty)
 
-  private[observe] def init(
-    m: Meter[IO]
-  ): IO[Unit] = meterRef.set(m) *> counters.set(Map.empty) *> upDowns.set(Map.empty) *> histograms.set(Map.empty)
+  private[observe] def init(m: Meter[IO]): IO[Unit] = meterRef.set(m) *> counters.set(Map.empty) *>
+    upDowns.set(Map.empty) *> histograms.set(Map.empty)
 
   /** 値の分布を記録する（処理時間・サイズなど. unit は "s"・"By" など）. */
-  def record(
-    name: String,
-    value: Double,
-    unit: String,
-    kv: (String, String)*
-  ): IO[Unit] =
+  def record(name: String, value: Double, unit: String, kv: (String, String)*): IO[Unit] =
     histograms.get.map(_.get(name)).flatMap {
       case Some(h) => IO.pure(h)
       case None =>
@@ -39,37 +33,19 @@ object Metrics {
         )
     }.flatMap(_.record(value, attrs(kv)*)).handleError(_ => ())
 
-  private def attrs(
-    kv: Seq[(String, String)]
-  ): List[Attribute[String]] = kv.toList.map(
-    (
-      k,
-      v
-    ) => Attribute(k, v)
-  )
+  private def attrs(kv: Seq[(String, String)]): List[Attribute[String]] = kv.toList.map((k, v) => Attribute(k, v))
 
   /** 数える（例: Metrics.count("skea.tasks.created", "via" -> "ui")）. */
-  def count(
-    name: String,
-    kv: (String, String)*
-  ): IO[Unit] = add(name, 1L, kv*)
+  def count(name: String, kv: (String, String)*): IO[Unit] = add(name, 1L, kv*)
 
-  def add(
-    name: String,
-    n: Long,
-    kv: (String, String)*
-  ): IO[Unit] =
+  def add(name: String, n: Long, kv: (String, String)*): IO[Unit] =
     counters.get.map(_.get(name)).flatMap {
       case Some(c) => IO.pure(c)
       case None => meterRef.get.flatMap(_.counter[Long](name).create).flatTap(c => counters.update(_.updated(name, c)))
     }.flatMap(_.add(n, attrs(kv)*)).handleError(_ => ())
 
   /** 増えたり減ったりする数（接続中の数など）. */
-  def upDown(
-    name: String,
-    n: Long,
-    kv: (String, String)*
-  ): IO[Unit] =
+  def upDown(name: String, n: Long, kv: (String, String)*): IO[Unit] =
     upDowns.get.map(_.get(name)).flatMap {
       case Some(c) => IO.pure(c)
       case None =>
@@ -77,25 +53,16 @@ object Metrics {
     }.flatMap(_.add(n, attrs(kv)*)).handleError(_ => ())
 
   /** 処理の間だけ数を1つ増やす（SSE の接続など）. */
-  def tracking[A](
-    name: String,
-    kv: (String, String)*
-  )(
-    fa: IO[A]
-  ): IO[A] =
+  def tracking[A](name: String, kv: (String, String)*)(fa: IO[A]): IO[A] =
     IO.uncancelable(poll => upDown(name, 1, kv*) *> poll(fa).guarantee(upDown(name, -1, kv*)))
 
   /**
    * DB などから定期的に読む値（ユーザーの数など）. every ごとに query を実行して覚え、メトリクスを送るときにその値を出す.
    * query が失敗したときは前の値のまま.
    */
-  def gauge(
-    name: String,
-    description: String,
-    every: FiniteDuration = 1.minute
-  )(
-    query: IO[Long]
-  ): Resource[IO, Unit] = {
+  def gauge(name: String,
+            description: String,
+            every: FiniteDuration = 1.minute)(query: IO[Long]): Resource[IO, Unit] = {
     val last = new AtomicLong(-1L)
     val refresh = query.flatMap(v => IO(last.set(v))).handleError(_ => ())
     for {

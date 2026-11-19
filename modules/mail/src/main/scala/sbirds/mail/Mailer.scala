@@ -7,38 +7,28 @@ import jakarta.mail.internet.{InternetAddress, MimeMessage}
 import java.util.{Date, Properties}
 
 /** SMTPの接続設定。tls: "starttls"（既定・587番）| "ssl"（465番）| "none"（社内リレー等）。 */
-final case class SmtpConfig(
-  host: String,
-  port: Int = 587,
-  user: Option[String] = None,
-  password: Option[String] = None,
-  tls: String = "starttls",
-  from: String,
-  timeoutMillis: Int = 15000)
+final case class SmtpConfig(host: String,
+                            port: Int = 587,
+                            user: Option[String] = None,
+                            password: Option[String] = None,
+                            tls: String = "starttls",
+                            from: String,
+                            timeoutMillis: Int = 15000)
 
-final case class Mail(
-  to: String,
-  toName: String,
-  subject: String,
-  body: String)
+final case class Mail(to: String, toName: String, subject: String, body: String)
 
 object Mail {
 
   /** ヘッダーに入れる値（改行などの制御文字を空白にする. ヘッダーの注入を防ぐ）. */
-  def headerValue(
-    s: String
-  ): String = s.map(c => if (c.isControl) ' ' else c).trim
+  def headerValue(s: String): String = s.map(c => if (c.isControl) ' ' else c).trim
 }
 
 trait Mailer {
-  def send(
-    m: Mail
-  ): IO[Unit]
+  def send(m: Mail): IO[Unit]
 }
 
 /** Jakarta Mail による送信。本文はUTF-8のプレーンテキスト。 */
-final class SmtpMailer(
-  cfg: SmtpConfig) extends Mailer {
+final class SmtpMailer(cfg: SmtpConfig) extends Mailer {
 
   private val session: Session = {
     val p = new Properties()
@@ -66,9 +56,7 @@ final class SmtpMailer(
     Session.getInstance(p, auth.orNull)
   }
 
-  def send(
-    m: Mail
-  ): IO[Unit] = IO.blocking {
+  def send(m: Mail): IO[Unit] = IO.blocking {
     val msg = new MimeMessage(session)
     msg.setFrom(new InternetAddress(cfg.from))
     msg.setRecipient(
@@ -86,7 +74,5 @@ final class SmtpMailer(
 final class MemoryMailer extends Mailer {
   val sent: Ref[IO, List[Mail]] = Ref.unsafe(Nil)
 
-  def send(
-    m: Mail
-  ): IO[Unit] = sent.update(_ :+ m)
+  def send(m: Mail): IO[Unit] = sent.update(_ :+ m)
 }

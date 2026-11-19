@@ -13,10 +13,7 @@ object Fetch {
   var extraHeaders: Map[String, String] = Map.empty
 
   /** fetch の設定（同じオリジンの Cookie を付ける. body は JSON の文字列）. */
-  def init(
-    method: dom.HttpMethod,
-    body: Option[String] = None
-  ): dom.RequestInit = {
+  def init(method: dom.HttpMethod, body: Option[String] = None): dom.RequestInit = {
     val i = new dom.RequestInit {}
     val hs = js.Dictionary[String](extraHeaders.toSeq*)
     i.method = method
@@ -30,9 +27,7 @@ object Fetch {
   }
 
   /** JSON を読む（失敗したら Future の失敗）. */
-  def getJson(
-    url: String
-  ): Future[io.circe.Json] =
+  def getJson(url: String): Future[io.circe.Json] =
     dom.fetch(url, init(dom.HttpMethod.GET)).toFuture.flatMap { res =>
       if (!res.ok) Future.failed(new Exception(s"${res.status} ${res.statusText}"))
       else res.text().toFuture.map(t => io.circe.parser.parse(t).fold(throw _, identity))

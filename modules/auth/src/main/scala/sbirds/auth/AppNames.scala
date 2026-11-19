@@ -20,22 +20,14 @@ object AppNames {
   val LogoPrefix = "_logo:"
 
   /** ID トークン（JWT）から表示名を読む（読めなければ空）. self は SelfKey の名前で入れる. */
-  def fromIdToken(
-    idToken: String
-  ): Map[String, String] =
+  def fromIdToken(idToken: String): Map[String, String] =
     IdToken.decodeClaims(idToken).toOption.fold(Map.empty[String, String])(fromClaims)
 
-  def fromClaims(
-    claims: Json
-  ): Map[String, String] = {
+  def fromClaims(claims: Json): Map[String, String] = {
     val c = claims.hcursor
     val apps = c.downField(AppsClaim).as[Map[String, String]].getOrElse(Map.empty)
-    val logos = c.downField(LogosClaim).as[Map[String, String]].getOrElse(Map.empty).map(
-      (
-        k,
-        v
-      ) => (LogoPrefix + k) -> v
-    )
+    val logos =
+      c.downField(LogosClaim).as[Map[String, String]].getOrElse(Map.empty).map((k, v) => (LogoPrefix + k) -> v)
     apps ++ logos ++
       c.get[String](SelfClaim).toOption.filter(_.trim.nonEmpty).map(SelfKey -> _) ++
       c.get[String](SelfLogoClaim).toOption.filter(_.trim.nonEmpty).map((LogoPrefix + SelfKey) -> _)

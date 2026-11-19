@@ -14,48 +14,31 @@ import sbirds.shared.{AppError, ErrorCode, ErrorDto, LibErrorCode}
 object Errors {
 
   /** エラーの応答を作り、ログに出す. */
-  def respond(
-    e: AppError,
-    req: Option[Request[IO]] = None
-  ): IO[Response[IO]] =
+  def respond(e: AppError, req: Option[Request[IO]] = None): IO[Response[IO]] =
     log(e, req).as(Response[IO](Status.fromInt(e.status).getOrElse(Status.InternalServerError)).withEntity(ErrorDto(
       e.message,
       Some(e.code.code)
     )))
 
-  def respond(
-    code: ErrorCode
-  ): IO[Response[IO]] = respond(AppError(code))
+  def respond(code: ErrorCode): IO[Response[IO]] = respond(AppError(code))
 
-  def respond(
-    code: ErrorCode,
-    detail: String
-  ): IO[Response[IO]] = respond(AppError(code, detail))
+  def respond(code: ErrorCode, detail: String): IO[Response[IO]] = respond(AppError(code, detail))
 
   /** ログの1行: [SKEA-2001] 404 タスクが見つかりません: その場の文言 (GET /api/tasks/{id}) */
-  def log(
-    e: AppError,
-    req: Option[Request[IO]] = None
-  ): IO[Unit] = {
+  def log(e: AppError, req: Option[Request[IO]] = None): IO[Unit] = {
     val where = req.fold("")(r => s" (${r.method} ${sbirds.observe.HttpTelemetry.route(r.pathInfo.renderString)})")
     Log.report(e.code, e.detail.filter(_ != e.code.message).getOrElse("") + where, e.cause.orNull)
   }
 
   /** 応答を返さない処理（バックグラウンドの処理など）のエラーをコード付きでログに出す. */
-  def report(
-    code: ErrorCode,
-    detail: String,
-    cause: Throwable | Null = null
-  ): IO[Unit] = Log.report(code, detail, cause)
+  def report(code: ErrorCode, detail: String, cause: Throwable | Null = null): IO[Unit] =
+    Log.report(code, detail, cause)
 
   /**
    * 予期しない例外をコード付きの 500 にする（AppError ならそのコードの応答）. HttpApp の一番外側に付ける.
    * code はサービスの「予期しないエラー」のコード（省略すると SBL-9001）.
    */
-  def handle(
-    app: HttpApp[IO],
-    code: ErrorCode = LibErrorCode.Unexpected
-  ): HttpApp[IO] = Kleisli { req =>
+  def handle(app: HttpApp[IO], code: ErrorCode = LibErrorCode.Unexpected): HttpApp[IO] = Kleisli { req =>
     app.run(req).handleErrorWith {
       case e: AppError => respond(e, Some(req))
       // 大きすぎる本文（MessageFailure の一種なので先に）
@@ -68,10 +51,7 @@ object Errors {
   }
 
   /** HttpRoutes の版（見つからないパスはそのまま次へ）. */
-  def handleRoutes(
-    routes: HttpRoutes[IO],
-    code: ErrorCode = LibErrorCode.Unexpected
-  ): HttpRoutes[IO] = Kleisli { req =>
+  def handleRoutes(routes: HttpRoutes[IO], code: ErrorCode = LibErrorCode.Unexpected): HttpRoutes[IO] = Kleisli { req =>
     OptionT(routes.run(req).value.handleErrorWith {
       case e: AppError => respond(e, Some(req)).map(Some(_))
       case e => respond(AppError(code, None, Some(e)), Some(req)).map(Some(_))

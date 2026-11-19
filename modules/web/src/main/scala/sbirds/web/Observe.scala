@@ -26,10 +26,7 @@ object Observe {
    * 画面の起動時に1度呼ぶ. enabled が false ならこのページでは読み込まない（IdP のログインの画面など）.
    * deferUntilUser なら、ログインした人が決まった（setUser）ときに読み込む.
    */
-  def start(
-    enabled: Boolean = true,
-    deferUntilUser: Boolean = false
-  ): Unit = {
+  def start(enabled: Boolean = true, deferUntilUser: Boolean = false): Unit = {
     this.enabled = enabled
     deferred = deferUntilUser
     if (enabled && !deferUntilUser) load()
@@ -58,15 +55,11 @@ object Observe {
   }
 
   /** ログインした人（ユーザーの ID）. /api/me を読んだ後に呼ぶ. */
-  def setUser(
-    id: String
-  ): Unit = {
+  def setUser(id: String): Unit = {
     user = Some(id)
     if (enabled && deferred && !loaded) load() else push(id)
   }
 
-  private def push(
-    id: String
-  ): Unit = sdk.foreach(_.setUser(id))
+  private def push(id: String): Unit = sdk.foreach(_.setUser(id))
 
 }
