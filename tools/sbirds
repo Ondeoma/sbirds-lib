@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# sbirds シリーズの全リポジトリをまとめて扱う道具. sbirds の直下（各リポジトリが並ぶフォルダ）を基準にする.
+#   sbirds-lib/tools/sbirds <コマンド> [引数]
+# 対象は、直下にある Git リポジトリのうち build.sbt を持つもの（worktree は除く）. REPOS="skea stui" で絞れる.
+set -uo pipefail
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+LIB="$ROOT/sbirds-lib"
+SHARED_SCRIPTS="lib.sh dev-restart.sh dist.sh"
+
+usage() {
+  cat <<'USAGE'
+使い方: sbirds-lib/tools/sbirds <コマンド>
+  status              全リポジトリのブランチ・未コミット・未プッシュ・未取得を一覧する
+  fetch               全リポジトリで git fetch する
+  pull                全リポジトリで git pull --ff-only する（未コミットの変更があるものは飛ばす）
+  each <コマンド...>   全リポジトリの直下でコマンドを実行する（例: each git log --oneline -1）
+  fmt                 全リポジトリで scalafmtAll scalafmtSbt を実行する
+  fmt-check           全リポジトリで scalafmtCheckAll scalafmtSbtCheck を実行する
+  test                全リポジトリで sbt test を実行し、結果をまとめる（ログは /tmp/sbirds-test-<名前>.log）
+  sync-scripts        sbirds-lib/scripts の共通スクリプトを各リポジトリの scripts/ に配る
+  check-scripts       各リポジトリの共通スクリプトが sbirds-lib と同じか確かめる（違えば終了コード 1）
+  lib-version         各リポジトリが参照している sbirds-lib のタグを一覧する
+  lib-bump <タグ>     各リポジトリの build.sbt の sbirds-lib の参照を <タグ> に書き換える（コミットはしない）
+  ports               各リポジトリの開発用のポート（HTTP_PORT・DB・PUBLIC_URL）を一覧し、重複を知らせる
+USAGE
+}
+
+repos() {
+  if [ -n "${REPOS:-}" ]; then echo $REPOS; return; fi
+  for d in "$ROOT"/*/; do
+    d=${d%/}; n=$(basename "$d")
+    [ -d "$d/.git" ] && [ -f "$d/build.sbt" ] && echo "$n"   # worktree は .git がファイルなので除かれる
+  done
+}
+services() { for r in $(repos); do [ "$r" = sbirds-lib ] || echo "$r"; done; }
+
+# 各リポジトリで関数を実行し、失敗したものを最後に一覧する: run_all <関数> <対象の一覧>
+run_all() {
+  local fn=$1; shift; local failed=()
+  for r in "$@"; do
+    printf '\033[1m== %s\033[0m\n' "$r"
+    (cd "$ROOT/$r" && "$fn" "$r") || failed+=("$r")
+  done
+  if [ ${#failed[@]} -gt 0 ]; then echo; echo "失敗: ${failed[*]}"; return 1; fi
+  echo; echo "すべて成功"
+}
+
+cmd=${1:-}; shift || true
+case "$cmd" in
+  status)
+    printf '%-12s %-18s %-8s %-8s %s\n' リポジトリ ブランチ 未プッシュ 未取得 未コミット
+    for r in $(repos); do
+      g="git -C $ROOT/$r"
+      b=$($g rev-parse --abbrev-ref HEAD)
+      ab=$($g rev-list --left-right --count '@{u}...HEAD' 2>/dev/null || echo "- -")
+      n=$($g status --porcelain | wc -l | tr -d ' ')
+      printf '%-12s %-18s %-8s %-8s %s\n' "$r" "$b" "${ab#*[[:space:]]}" "${ab%%[[:space:]]*}" "$n"
+    done
+    wt=$(for r in $(repos); do git -C "$ROOT/$r" worktree list --porcelain | awk -v r="$r" 'NR>1 && /^worktree /{print r": "$2}'; done)
+    if [ -n "$wt" ]; then echo; echo "worktree:"; echo "$wt"; fi
+    ;;
+  fetch) f() { git fetch -q --prune; }; run_all f $(repos) ;;
+  pull)
+    f() { if [ -n "$(git status --porcelain)" ]; then echo "未コミットの変更があるので飛ばす"; return 1; fi; git pull -q --ff-only; }
+    run_all f $(repos) ;;
+  each)
+    [ $# -gt 0 ] || { usage; exit 2; }
+    f() { "${ARGS[@]}"; }; ARGS=("$@"); run_all f $(repos) ;;
+  fmt) f() { sbt -batch -no-colors scalafmtAll scalafmtSbt >/dev/null && echo ok; }; run_all f $(repos) ;;
+  fmt-check) f() { sbt -batch -no-colors scalafmtCheckAll scalafmtSbtCheck 2>&1 | grep -E '\[(warn|error)\]' | head -20; [ "${PIPESTATUS[0]}" -eq 0 ]; }; run_all f $(repos) ;;
+  test)
+    f() {
+      local log=/tmp/sbirds-test-$1.log
+      if sbt -batch -no-colors test > "$log" 2>&1; then grep -E 'Passed: Total|Tests: succeeded' "$log" | tail -3; else grep -E '\[error\]|==> X' "$log" | head -20; echo "ログ: $log"; return 1; fi
+    }
+    run_all f $(repos) ;;
+  sync-scripts)
+    for r in $(services); do
+      for s in $SHARED_SCRIPTS; do cp "$LIB/scripts/$s" "$ROOT/$r/scripts/$s"; done
+      git -C "$ROOT/$r" status --porcelain -- scripts | sed "s#^#$r: #"
+    done ;;
+  check-scripts)
+    ng=0
+    for r in $(services); do for s in $SHARED_SCRIPTS; do
+      cmp -s "$LIB/scripts/$s" "$ROOT/$r/scripts/$s" || { echo "違う: $r/scripts/$s"; ng=1; }
+    done; done
+    [ $ng -eq 0 ] && echo "すべて sbirds-lib と同じ"; exit $ng ;;
+  lib-version)
+    for r in $(services); do printf '%-12s %s\n' "$r" "$(grep -o 'sbirds-lib.git#[^"]*' "$ROOT/$r/build.sbt" | head -1 | cut -d'#' -f2)"; done ;;
+  lib-bump)
+    tag=${1:?タグを指定してください（例: v0.2.0）}
+    git -C "$LIB" rev-parse -q --verify "refs/tags/$tag" >/dev/null || echo "注意: sbirds-lib に $tag のタグが手元にありません（プッシュ済みか確かめてください）"
+    for r in $(services); do
+      sed -i '' -E "s#(sbirds-lib\.git\#)[^\"]+#\1$tag#" "$ROOT/$r/build.sbt"
+      printf '%-12s %s\n' "$r" "$(grep -o 'sbirds-lib.git#[^"]*' "$ROOT/$r/build.sbt" | head -1)"
+    done ;;
+  ports)
+    for r in $(services); do
+      e="$ROOT/$r/scripts/dev-env.sh"
+      p=$(grep -oE 'HTTP_PORT=(\$\{HTTP_PORT:-)?[0-9]+' "$e" | grep -oE '[0-9]+$' | head -1)
+      db=$(grep -oE 'localhost:[0-9]+/' "$e" | head -1 | tr -dc '0-9')
+      pub=$(grep -oE 'localhost:[0-9]+' <(grep PUBLIC_URL "$e") | head -1 | cut -d: -f2)
+      printf '%-12s HTTP %-6s DB %-6s 画面 %s\n' "$r" "$p" "$db" "$pub"
+    done | tee /dev/stderr | awk '{print $3}' | sort | uniq -d | sed 's/^/重複している HTTP_PORT: /' ;;
+  ""|-h|--help|help) usage ;;
+  *) echo "不明なコマンド: $cmd"; usage; exit 2 ;;
+esac

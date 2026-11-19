@@ -40,3 +40,9 @@ lazy val libObserve = ProjectRef(sbirdsLib, "observe")
 
 sruru に登録したアプリケーションの名前（グループごとの上書きを反映したもの）を、ID トークンの `sbirds_apps`・`sbirds_app` で受け取ります。
 バックエンドは `sbirds.auth.AppNames.fromIdToken`、画面は `sbirds.web.AppNames`（`self`・`of("stui")`）で使います。
+
+## 共通スクリプトと道具
+
+- `scripts/`: 各サービスの `scripts/` に配る共通スクリプト（`lib.sh`・`dev-restart.sh`・`dist.sh`）。プロジェクトごとの設定は各サービスの `scripts/dev-env.sh` に書く。
+  直したら `tools/sbirds sync-scripts` で配り、`tools/sbirds check-scripts` で揃っているか確かめる。
+- `tools/sbirds`: sbirds の全リポジトリをまとめて扱う道具（`status`・`pull`・`test`・`fmt-check`・`lib-bump` など。`tools/sbirds help` で一覧）。
