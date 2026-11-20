@@ -95,6 +95,10 @@ object HttpTelemetry {
           end <- IO.monotonic
           dur = end - start
           status = res.fold(_ => 500, _.status.code)
+          // 存在しないパスは 1 つにまとめる（認証なしで任意のパスを叩かれても、メトリクスの系列とスパン名が増え続けない）
+          seen = if (status == 404) "/*" else rt
+          _ <- IO.whenA(status == 404)(span.updateName(s"$method $seen") *>
+            span.addAttributes(List(Attribute("http.route", seen))))
           _ <- span.addAttributes(List(Attribute("http.response.status_code", status.toLong)))
           _ <- res.fold(
             e => span.recordException(e) *> span.setStatus(StatusCode.Error, e.getClass.getSimpleName),
@@ -103,7 +107,7 @@ object HttpTelemetry {
           _ <- hist.record(
             dur.toNanos / 1e9,
             Attribute("http.request.method", method),
-            Attribute("http.route", rt),
+            Attribute("http.route", seen),
             Attribute("http.response.status_code", status.toLong)
           )
           _ <- IO(log(method, shown, status, dur, slot.get, res.left.toOption))

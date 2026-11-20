@@ -73,7 +73,9 @@ object Telemetry {
       "otel.logs.exporter" -> "otlp",
       "otel.metric.export.interval" -> "30000",
       "otel.traces.sampler" -> "parentbased_traceidratio",
-      "otel.traces.sampler.arg" -> "1.0"
+      "otel.traces.sampler.arg" -> "1.0",
+      // baggage（操作したユーザーの ID・名前）は外向きの要求に載せない（Webhook やプッシュの送り先に漏れる）
+      "otel.propagators" -> "tracecontext"
     )
     for {
       otel <- OtelJava.autoConfigured[IO](_.addPropertiesSupplier(() => defaults.asJava))

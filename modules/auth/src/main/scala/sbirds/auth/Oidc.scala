@@ -25,11 +25,13 @@ final case class OidcConfig(
   /** ログインを許すグループ（空ならだれでも） */
   allowedGroups: Set[String] = Set.empty)
 
+/** emailVerified: ID トークンの email_verified（クレームがなければ None）. メールアドレスでの結び付けは Some(true) のときだけにする. */
 final case class Identity(sub: String,
                           email: Option[String],
                           name: String,
                           groups: List[String],
-                          picture: Option[String] = None)
+                          picture: Option[String] = None,
+                          emailVerified: Option[Boolean] = None)
 
 final case class ProviderMetadata(issuer: String,
                                   authorizationEndpoint: Uri,
@@ -77,7 +79,10 @@ object IdToken {
         .orElse(email)
         .getOrElse(sub)
       val groups = c.downField(cfg.groupsClaim).as[List[String]].getOrElse(Nil)
-      Identity(sub, email, name, groups, c.get[String]("picture").toOption)
+      // 文字列（"true"）で返す IdP もある
+      val verified = c.get[Boolean]("email_verified").toOption
+        .orElse(c.get[String]("email_verified").toOption.map(_.equalsIgnoreCase("true")))
+      Identity(sub, email, name, groups, c.get[String]("picture").toOption, verified)
     }
   }
 }

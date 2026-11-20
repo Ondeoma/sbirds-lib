@@ -91,11 +91,17 @@ final class DevIdp(issuer: String, clientId: String, clientSecret: String, codes
   private def tokenError(code: String, status: Status = Status.BadRequest): IO[Response[IO]] =
     IO.pure(Response[IO](status).withEntity(Json.obj("error" -> code.asJson)))
 
+  /** 手元の URL か（ホストを完全一致で比べる. `localhost.example.com` のような名前を通さない）. */
+  private def local(url: String): Boolean =
+    scala.util.Try(java.net.URI.create(url)).toOption.exists(u =>
+      u.getScheme == "http" && (u.getHost == "localhost" || u.getHost == "127.0.0.1")
+    )
+
   private def checkClient(id: Option[String], redirect: Option[String]): Either[String, (String, String)] =
     (id, redirect) match {
       case (Some(c), Some(r))
           if c == clientId &&
-            (r.startsWith("http://localhost") || r.startsWith("http://127.0.0.1") || r.startsWith(issuer)) =>
+            (local(r) || r.startsWith(issuer + "/")) =>
         Right((c, r))
       case (Some(c), _) if c != clientId => Left(s"unknown client_id: $c")
       case _ => Left("client_id と redirect_uri が必要です")
@@ -200,9 +206,7 @@ final class DevIdp(issuer: String, clientId: String, clientSecret: String, codes
       }
 
     case req @ GET -> Root / "logout" =>
-      req.params.get("post_logout_redirect_uri").filter(u =>
-        u.startsWith("http://localhost") || u.startsWith("http://127.0.0.1")
-      ) match {
+      req.params.get("post_logout_redirect_uri").filter(local) match {
         case Some(u) => IO.pure(Response[IO](Status.Found).putHeaders(Location(Uri.unsafeFromString(u))))
         case None => html("<h1>ログアウトしました</h1>")
       }

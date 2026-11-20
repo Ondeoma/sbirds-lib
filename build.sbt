@@ -17,6 +17,7 @@ val otel4sV = "1.2.0"
 val otelV = "1.68.0"
 val otelInstV = "2.33.1-alpha"
 val awsV = "2.30.38"
+val flywayV = "11.3.0"
 
 lazy val commonTest = Seq(
   libraryDependencies ++= Seq(
@@ -77,24 +78,27 @@ lazy val auth = (project in file("modules/auth"))
 // HTTP の API の共通部分（エラーコードと応答・ログ）
 lazy val http = (project in file("modules/http"))
   .settings(name := "sbirds-http")
-  .dependsOn(shared.jvm, observe)
+  .dependsOn(shared.jvm, observe, auth)
   .settings(commonTest)
   .settings(
     libraryDependencies ++= Seq(
       "org.http4s" %% "http4s-dsl" % http4sV,
       "org.http4s" %% "http4s-circe" % http4sV,
-      "org.http4s" %% "http4s-server" % http4sV
+      "org.http4s" %% "http4s-server" % http4sV,
+      "org.typelevel" %% "log4cats-noop" % "2.8.0" % Test
     )
   )
 
 // プッシュ通知（PWA. Web Push の暗号化と VAPID は JDK の暗号の機能だけで実装）
 lazy val push = (project in file("modules/push"))
   .settings(name := "sbirds-push")
-  .dependsOn(observe)
+  .dependsOn(observe, http)
   .settings(commonTest)
   .settings(
     libraryDependencies ++= Seq(
       "org.http4s" %% "http4s-client" % http4sV,
+      "org.http4s" %% "http4s-dsl" % http4sV,
+      "org.http4s" %% "http4s-circe" % http4sV,
       "io.circe" %% "circe-core" % circeV,
       "org.tpolecat" %% "doobie-core" % doobieV,
       "org.tpolecat" %% "doobie-postgres" % doobieV
@@ -104,7 +108,7 @@ lazy val push = (project in file("modules/push"))
 // 画面（Scala.js）の共通部分（API の呼び出し・PWA・観測・モーダルなど）
 lazy val web = (project in file("modules/web"))
   .settings(name := "sbirds-web")
-  .enablePlugins(ScalaJSPlugin)
+  .enablePlugins(ScalaJSPlugin, ScalactivePlugin)
   .dependsOn(shared.js)
   .settings(
     libraryDependencies ++= Seq(
@@ -148,6 +152,63 @@ lazy val links = (project in file("modules/links"))
     )
   )
 
+// DB の共通部分（接続のプール・マイグレーション・定期的な処理・リース・SQL の部品）
+lazy val db = (project in file("modules/db"))
+  .settings(name := "sbirds-db")
+  .dependsOn(shared.jvm, observe)
+  .settings(commonTest)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.tpolecat" %% "doobie-core" % doobieV,
+      "org.tpolecat" %% "doobie-hikari" % doobieV,
+      "org.tpolecat" %% "doobie-postgres" % doobieV,
+      "org.postgresql" % "postgresql" % "42.7.14",
+      "org.flywaydb" % "flyway-core" % flywayV,
+      "org.flywaydb" % "flyway-database-postgresql" % flywayV % Runtime
+    )
+  )
+
+// 外への接続の確認（SSRF 対策: 内部のアドレスの判定・確かめた IP にそのままつなぐクライアント）
+lazy val net = (project in file("modules/net"))
+  .settings(name := "sbirds-net")
+  .settings(commonTest)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-ember-client" % http4sV,
+      "org.typelevel" %% "cats-effect" % ceV,
+      "org.typelevel" %% "log4cats-noop" % "2.8.0"
+    )
+  )
+
+// OAuth の提供側（認可コード + PKCE. 許可の画面・トークン・失効・クライアントの設定・認可コードの保存）
+lazy val oauth = (project in file("modules/oauth"))
+  .settings(name := "sbirds-oauth")
+  .dependsOn(shared.jvm, auth, http, db)
+  .settings(commonTest)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-dsl" % http4sV,
+      "org.http4s" %% "http4s-circe" % http4sV,
+      "io.circe" %% "circe-parser" % circeV,
+      "org.tpolecat" %% "doobie-core" % doobieV,
+      "org.tpolecat" %% "doobie-postgres" % doobieV
+    )
+  )
+
+// MCP（Model Context Protocol）のサーバーの枠（JSON-RPC の振り分け・ツールの定義・REST API の内部呼び出し）
+lazy val mcp = (project in file("modules/mcp"))
+  .settings(name := "sbirds-mcp")
+  .dependsOn(shared.jvm, observe, http)
+  .settings(commonTest)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-dsl" % http4sV,
+      "org.http4s" %% "http4s-circe" % http4sV,
+      "io.circe" %% "circe-parser" % circeV,
+      "org.typelevel" %% "log4cats-noop" % "2.8.0" % Test
+    )
+  )
+
 // 開発用の OIDC プロバイダ
 lazy val devidp = (project in file("modules/devidp"))
   .settings(name := "sbirds-devidp")
@@ -164,5 +225,5 @@ lazy val devidp = (project in file("modules/devidp"))
   )
 
 lazy val root = (project in file("."))
-  .aggregate(shared.jvm, shared.js, observe, auth, http, push, web, mail, storage, links, devidp)
+  .aggregate(shared.jvm, shared.js, observe, auth, http, push, web, mail, storage, links, devidp, db, net, oauth, mcp)
   .settings(name := "sbirds-lib", publish / skip := true)

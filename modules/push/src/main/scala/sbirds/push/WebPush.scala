@@ -81,9 +81,12 @@ object WebPush {
   private def hkdf(salt: Array[Byte], ikm: Array[Byte], info: Array[Byte], len: Int): Array[Byte] =
     hmac(hmac(salt, ikm), info ++ Array[Byte](1)).take(len)
 
+  /** 暗号化できる本文の大きさ（バイト）. */
+  val MaxPayload = 3800
+
   /** 本文を暗号化する（aes128gcm. 1つのレコード）. 戻り値はそのまま POST の本文にする. */
   def encrypt(sub: Subscription, payload: Array[Byte]): Array[Byte] = {
-    require(payload.length <= 3800, "本文が大きすぎます（約 4KB まで）")
+    require(payload.length <= MaxPayload, "本文が大きすぎます（約 4KB まで）")
     val uaPublic = dec(sub.p256dh)
     val authSecret = dec(sub.auth)
     val g = KeyPairGenerator.getInstance("EC")

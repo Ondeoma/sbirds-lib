@@ -111,4 +111,19 @@ class OidcSpec extends munit.FunSuite {
       now
     ).isRight)
   }
+
+  test("email_verified を読む（なければ None。文字列の true も受け付ける）") {
+    def verified(v: Option[Json]) =
+      IdToken.validate(
+        v.fold(claims())(x => claims().deepMerge(Json.obj("email_verified" -> x))),
+        cfg.issuer,
+        cfg,
+        "n1",
+        now
+      ).map(_.emailVerified)
+    assertEquals(verified(None), Right(None))
+    assertEquals(verified(Some(true.asJson)), Right(Some(true)))
+    assertEquals(verified(Some(false.asJson)), Right(Some(false)))
+    assertEquals(verified(Some("true".asJson)), Right(Some(true)))
+  }
 }

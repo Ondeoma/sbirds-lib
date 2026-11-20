@@ -24,6 +24,19 @@ object Errors {
 
   def respond(code: ErrorCode, detail: String): IO[Response[IO]] = respond(AppError(code, detail))
 
+  /**
+   * エラーの応答を作り、ログに出す. logDetail はログにだけ出し、利用者には code の既定の文言を返す
+   * （ログインの失敗の理由など、利用者に見せない詳細があるとき）.
+   */
+  def respondLogged(code: ErrorCode,
+                    logDetail: String,
+                    req: Option[Request[IO]] = None,
+                    cause: Option[Throwable] = None): IO[Response[IO]] =
+    log(AppError(code, Some(logDetail), cause), req).as(
+      Response[IO](Status.fromInt(code.status).getOrElse(Status.InternalServerError))
+        .withEntity(ErrorDto(code.message, Some(code.code)))
+    )
+
   /** ログの1行: [SKEA-2001] 404 タスクが見つかりません: その場の文言 (GET /api/tasks/{id}) */
   def log(e: AppError, req: Option[Request[IO]] = None): IO[Unit] = {
     val where = req.fold("")(r => s" (${r.method} ${sbirds.observe.HttpTelemetry.route(r.pathInfo.renderString)})")
@@ -39,22 +52,21 @@ object Errors {
    * code はサービスの「予期しないエラー」のコード（省略すると SBL-9001）.
    */
   def handle(app: HttpApp[IO], code: ErrorCode = LibErrorCode.Unexpected): HttpApp[IO] = Kleisli { req =>
-    app.run(req).handleErrorWith {
-      case e: AppError => respond(e, Some(req))
-      // 大きすぎる本文（MessageFailure の一種なので先に）
-      case _: org.http4s.server.middleware.EntityLimiter.EntityTooLarge =>
-        respond(AppError(LibErrorCode.TooLarge), Some(req))
-      // 本文の読み取りの失敗: パーサーの文言は利用者に返さない（ログには cause として出る）
-      case e: MessageFailure => respond(AppError(LibErrorCode.BadBody, None, Some(e)), Some(req))
-      case e => respond(AppError(code, None, Some(e)), Some(req))
-    }
+    app.run(req).handleErrorWith(failed(req, code))
+  }
+
+  private def failed(req: Request[IO], code: ErrorCode)(e: Throwable): IO[Response[IO]] = e match {
+    case e: AppError => respond(e, Some(req))
+    // 大きすぎる本文（MessageFailure の一種なので先に）
+    case _: org.http4s.server.middleware.EntityLimiter.EntityTooLarge =>
+      respond(AppError(LibErrorCode.TooLarge), Some(req))
+    // 本文の読み取りの失敗: パーサーの文言は利用者に返さない（ログには cause として出る）
+    case e: MessageFailure => respond(AppError(LibErrorCode.BadBody, None, Some(e)), Some(req))
+    case e => respond(AppError(code, None, Some(e)), Some(req))
   }
 
   /** HttpRoutes の版（見つからないパスはそのまま次へ）. */
   def handleRoutes(routes: HttpRoutes[IO], code: ErrorCode = LibErrorCode.Unexpected): HttpRoutes[IO] = Kleisli { req =>
-    OptionT(routes.run(req).value.handleErrorWith {
-      case e: AppError => respond(e, Some(req)).map(Some(_))
-      case e => respond(AppError(code, None, Some(e)), Some(req)).map(Some(_))
-    })
+    OptionT(routes.run(req).value.handleErrorWith(e => failed(req, code)(e).map(Some(_))))
   }
 }

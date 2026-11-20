@@ -6,6 +6,13 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 LIB="$ROOT/sbirds-lib"
 SHARED_SCRIPTS="lib.sh dev-restart.sh dist.sh"
+# scripts 以外の、各リポジトリに配るファイル（ひな形は sbirds-lib/templates）. 1行に1つ:
+#   <ひな形>|<配る先（リポジトリの直下から）>|<配る先の行を残す行の先頭（; 区切り）>|<配らないリポジトリ（空白区切り）>
+# ひな形の中の @SERVICE@ はリポジトリの名前に置き換える.「行を残す」は、サービスごとに違う行（sw.js の SKIP など）を配る先のまま保つ.
+# 配る先のファイルが無いリポジトリには配らない（その仕組みを使っていない）.
+SHARED_FILES='logback.xml|modules/app/src/main/resources/logback.xml||skorimako
+sw.js|frontend/public/sw.js|const CACHE = ;const SKIP = |
+vite-scalajs.js|frontend/vite-scalajs.js||'
 
 usage() {
   cat <<'USAGE'
@@ -17,8 +24,9 @@ usage() {
   fmt                 全リポジトリで scalafmtAll scalafmtSbt を実行する
   fmt-check           全リポジトリで scalafmtCheckAll scalafmtSbtCheck を実行する
   test                全リポジトリで sbt test を実行し、結果をまとめる（ログは /tmp/sbirds-test-<名前>.log）
-  sync-scripts        sbirds-lib/scripts の共通スクリプトを各リポジトリの scripts/ に配る
-  check-scripts       各リポジトリの共通スクリプトが sbirds-lib と同じか確かめる（違えば終了コード 1）
+  sync-scripts        sbirds-lib/scripts の共通スクリプトと、sbirds-lib/templates の共通ファイル
+                      （logback.xml・sw.js・vite-scalajs.js）を各リポジトリに配る
+  check-scripts       各リポジトリの共通スクリプト・共通ファイルが sbirds-lib と同じか確かめる（違えば終了コード 1）
   lib-version         各リポジトリが参照している sbirds-lib のタグを一覧する
   lib-bump <タグ>     各リポジトリの build.sbt の sbirds-lib の参照を <タグ> に書き換える（コミットはしない）
   ports               各リポジトリの開発用のポート（HTTP_PORT・DB・PUBLIC_URL）を一覧し、重複を知らせる
@@ -44,6 +52,33 @@ run_all() {
   if [ ${#failed[@]} -gt 0 ]; then echo; echo "失敗: ${failed[*]}"; return 1; fi
   echo; echo "すべて成功"
 }
+
+# ひな形を、そのリポジトリ向けの中身にして標準出力に出す: render <リポジトリ> <ひな形> <配る先> <残す行の先頭（; 区切り）>
+render() {
+  KEEP="$4" awk -v svc="$1" -v dest="$ROOT/$1/$3" '
+    BEGIN {
+      n = split(ENVIRON["KEEP"], keep, ";")
+      while ((getline line < dest) > 0)
+        for (i = 1; i <= n; i++)
+          if (keep[i] != "" && index(line, keep[i]) == 1 && !(i in kept)) kept[i] = line
+    }
+    {
+      for (i = 1; i <= n; i++) if (keep[i] != "" && index($0, keep[i]) == 1 && (i in kept)) { print kept[i]; next }
+      gsub(/@SERVICE@/, svc); print
+    }' "$LIB/templates/$2"
+}
+
+# 配る共通ファイルごとに関数を呼ぶ: each_shared_file <リポジトリ> <関数>（関数には <リポジトリ> <ひな形> <配る先> <残す行> が渡る）
+each_shared_file() {
+  local r=$1 fn=$2 tpl dest keep skip
+  while IFS='|' read -r tpl dest keep skip; do
+    case " $skip " in *" $r "*) continue ;; esac
+    [ -f "$ROOT/$r/$dest" ] || continue
+    "$fn" "$r" "$tpl" "$dest" "$keep"
+  done <<< "$SHARED_FILES"
+}
+
+dest_of() { echo "$3"; }
 
 cmd=${1:-}; shift || true
 case "$cmd" in
@@ -77,13 +112,19 @@ case "$cmd" in
   sync-scripts)
     for r in $(services); do
       for s in $SHARED_SCRIPTS; do cp "$LIB/scripts/$s" "$ROOT/$r/scripts/$s"; done
-      git -C "$ROOT/$r" status --porcelain -- scripts | sed "s#^#$r: #"
+      put() { local out; out=$(render "$@"; echo x); printf '%s' "${out%x}" > "$ROOT/$1/$3"; }
+      each_shared_file "$r" put
+      git -C "$ROOT/$r" status --porcelain -- scripts $(each_shared_file "$r" dest_of) | sed "s#^#$r: #"
     done ;;
   check-scripts)
     ng=0
-    for r in $(services); do for s in $SHARED_SCRIPTS; do
-      cmp -s "$LIB/scripts/$s" "$ROOT/$r/scripts/$s" || { echo "違う: $r/scripts/$s"; ng=1; }
-    done; done
+    same() { render "$@" | cmp -s - "$ROOT/$1/$3" || { echo "違う: $1/$3"; ng=1; }; }
+    for r in $(services); do
+      for s in $SHARED_SCRIPTS; do
+        cmp -s "$LIB/scripts/$s" "$ROOT/$r/scripts/$s" || { echo "違う: $r/scripts/$s"; ng=1; }
+      done
+      each_shared_file "$r" same
+    done
     [ $ng -eq 0 ] && echo "すべて sbirds-lib と同じ"; exit $ng ;;
   lib-version)
     for r in $(services); do printf '%-12s %s\n' "$r" "$(grep -o 'sbirds-lib.git#[^"]*' "$ROOT/$r/build.sbt" | head -1 | cut -d'#' -f2)"; done ;;

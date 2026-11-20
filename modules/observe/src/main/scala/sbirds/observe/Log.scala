@@ -20,10 +20,6 @@ object Log {
    * エラーコード付きのログ: [SKEA-9101] 500 期日の確認に失敗しました: 詳細.
    * 水準はコードのステータスで決める（5xx は ERROR、401 は INFO、ほかは WARN）.
    */
-  /**
-   * エラーコード付きのログ: [SKEA-9101] 500 期日の確認に失敗しました: 詳細.
-   * 水準はコードのステータスで決める（5xx は ERROR、401 は INFO、ほかは WARN）.
-   */
   def report(code: sbirds.shared.ErrorCode, detail: String = "", cause: Throwable | Null = null): IO[Unit] =
     IO(reportNow(code, detail, cause))
 

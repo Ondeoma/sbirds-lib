@@ -45,7 +45,9 @@ final class SmtpMailer(cfg: SmtpConfig) extends Mailer {
         p.put("mail.smtp.starttls.enable", "true")
         p.put("mail.smtp.starttls.required", "true")
         p.put("mail.smtp.ssl.checkserveridentity", "true")
-      case _ => ()
+      case "none" => ()
+      // 打ち間違いで黙って平文になる（認証情報も平文で流れる）のを防ぐ
+      case other => throw new IllegalArgumentException(s"SMTP の tls の値が不正です: $other（starttls・ssl・none のいずれか）")
     }
     val auth = cfg.user.map { u =>
       p.put("mail.smtp.auth", "true")
@@ -58,7 +60,7 @@ final class SmtpMailer(cfg: SmtpConfig) extends Mailer {
 
   def send(m: Mail): IO[Unit] = IO.blocking {
     val msg = new MimeMessage(session)
-    msg.setFrom(new InternetAddress(cfg.from))
+    msg.setFrom(new InternetAddress(Mail.headerValue(cfg.from)))
     msg.setRecipient(
       Message.RecipientType.TO,
       new InternetAddress(Mail.headerValue(m.to), Mail.headerValue(m.toName), "UTF-8")

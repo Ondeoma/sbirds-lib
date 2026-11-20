@@ -81,21 +81,28 @@ final class PushService(store: PushStore, http: Client[IO], keys: VapidKeys, sub
 
   def send(userId: UUID, m: PushMessage): IO[Unit] =
     sbirds.observe.Telemetry.span("push.send")(store.forUser(userId).flatMap(_.traverse_(s =>
-      deliver(s, m)
+      // 1 台の失敗（壊れた鍵など）で、残りの端末への送信を止めない
+      deliver(s, m).handleErrorWith(e => sbirds.observe.Log.warn(s"push failed: ${e.getClass.getSimpleName}"))
     ))).handleErrorWith(e => sbirds.observe.Log.warn(s"push failed: $e"))
+
+  /** 本文（JSON）. 暗号化できる大きさ（UTF-8 で 3800 バイト）に収まるまで body を縮める. */
+  private def payload(m: PushMessage): Array[Byte] = {
+    def json(body: String) = Json.obj(
+      "title" -> Json.fromString(m.title.take(200)),
+      "body" -> Json.fromString(body),
+      "url" -> Json.fromString(m.url.take(1000)),
+      "tag" -> m.tag.fold(Json.Null)(t => Json.fromString(t.take(200)))
+    ).noSpaces.getBytes("UTF-8")
+    Iterator.iterate(m.body.take(1000))(b => b.take(b.length / 2)).map(json)
+      .find(_.length <= WebPush.MaxPayload).getOrElse(json(""))
+  }
 
   private def deliver(s: Subscription, m: PushMessage): IO[Unit] =
     if !WebPush.allowedEndpoint(s.endpoint) then store.remove(s.endpoint)
     else {
-      val payload = Json.obj(
-        "title" -> Json.fromString(m.title.take(200)),
-        "body" -> Json.fromString(m.body.take(1000)),
-        "url" -> Json.fromString(m.url),
-        "tag" -> m.tag.fold(Json.Null)(Json.fromString)
-      ).noSpaces
       for {
         now <- IO.realTime.map(_.toSeconds)
-        body <- IO(WebPush.encrypt(s, payload.getBytes("UTF-8")))
+        body <- IO(WebPush.encrypt(s, payload(m)))
         req = Request[IO](Method.POST, Uri.unsafeFromString(s.endpoint))
           .withEntity(body)
           .putHeaders(
