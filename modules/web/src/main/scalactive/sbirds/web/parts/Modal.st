@@ -2,26 +2,15 @@
 import org.scalajs.dom
 import sbirds.web.Backdrop
 
-import scala.scalajs.js
-
 // モーダルの枠（body の直下に描く。背景のクリック（押し始めも背景のとき）か Esc キーで onClose を呼ぶ）
 case class Props(onClose: Unit => Unit, wide: Boolean = false, xwide: Boolean = false, slot: Slot = Slot.empty)
 
-case class State(esc: RV[Option[js.Function1[dom.KeyboardEvent, Unit]]] = RV(None))
-
-def initState() = State()
-
-def mounted(s: State, props: Props): Unit = {
-  val f: js.Function1[dom.KeyboardEvent, Unit] = (e: dom.KeyboardEvent) =>
-    // エディタの候補の一覧などが Esc を使ったときは閉じない
+def mounted(props: Props): Unit = {
+  // エディタの候補の一覧などが Esc を使ったときは閉じない. 片付けると自動で外れる
+  useEventListener[dom.KeyboardEvent](dom.window, "keydown") { e =>
     if (e.key == "Escape" && !e.defaultPrevented) props.onClose(())
-  dom.window.addEventListener("keydown", f)
-  s.esc := Some(f)
-}
-
-def unmounted(s: State): Unit = {
-  s.esc.v.foreach(f => dom.window.removeEventListener("keydown", f))
-  s.esc := None
+  }
+  ()
 }
 
 def cls(props: Props): String = if (props.xwide) "modal xwide" else if (props.wide) "modal wide" else "modal"

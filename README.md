@@ -33,7 +33,7 @@ lazy val libObserve = ProjectRef(sbirdsLib, "observe")
 | `links` | `sbirds.links` | 兄弟のサービスとの OAuth 連携のトークンの保存 |
 | `mcp` | `sbirds.mcp` | MCP のサーバーの枠: JSON-RPC の振り分け（`McpServer`）、ツールの定義（`McpTool`・`McpSchema`）、REST API の内部呼び出し（`McpCaller`） |
 | `devidp` | `sbirds.devidp` | 開発用の OIDC プロバイダ |
-| `web`（Scala.js） | `sbirds.web` | PWA・観測（RUM）・モーダル・ルートの補助・アプリの表示名（`AppNames`）、この端末の設定と画面の色（`LocalPrefs`・`ThemeSwitch`）、日時の表示（`Dates`）、`.st` の部品（`sbirds.web.parts`: `Modal`・`PushToggle`） |
+| `web`（Scala.js） | `sbirds.web` | PWA・観測（RUM）・モーダル・ルートの補助・アプリの表示名（`AppNames`）、この端末の設定と画面の色（`LocalPrefs`・`ThemeSwitch`）、日時の表示（`Dates`）、`.st` の部品（`sbirds.web.parts`: `Modal`・`PushToggle`・`Combo`・`DialogHost`・`ToastHost`・`UserPicker` など） |
 
 ## 共通の部品の使い方
 
@@ -279,6 +279,16 @@ object Fmt { export sbirds.web.Dates.{ago, dateTime}; … }
 | `LocalPrefs(service)` | この端末だけの設定（localStorage。`get(key, default)`・`set(key, value)`） |
 | `ThemeSwitch(prefs, options)` | 画面の色（`current`・`apply()`・`set(v)`・`options`。html の `data-theme` を付け外しする） |
 | `Dates` | `dateTime(t)`（2026/11/15 09:30）・`ago(t)`（「3分前」。7 日を超えたら日付） |
+| `ApiBase` | `object Api extends ApiBase` の共通部分（get・post・put・patch・delete・`deleteWith`（本文つき）・`postRaw`・`putRaw`（画像などをそのまま）・`postFile`（multipart の file）・query・seg）。401 はログインへ |
+| `Toasts`・`parts.ToastHost` | お知らせ（`show(text, link, error, action, ms)`・`withAction(text, label)(f)`・`error`・`report`）。`duration`・`errorDuration`・`max` を起動時に変えられる。ボタンのクラスは `act` |
+| `Dialog`・`parts.DialogHost` | 確認・入力・選択（`confirm`・`prompt(danger, placeholder)`・`choose(radio, onCancel)`・`alert`） |
+| `LeaveGuard.install(dirty)` | 保存していない変更があるときに、画面を移る・閉じる前に確かめる |
+| `parts.Avatar`・`parts.Combo`・`Person`・`Opt` | 人のアイコン、オートコンプリート（`onQuery`・`filter = false` でサーバーの検索にも使える） |
+| `parts.UserPicker`・`PeopleSearch` | 人を探して選ぶ（`search: String => Future[List[Person]]`。`PeopleSearch` を使うと、選んだ Person から元の値を引ける。`combo` で Combo の見た目） |
+| `parts.EmojiPicker`・`CustomEmojis` | リアクションの絵文字（分類は `categories` で渡す）とカスタム絵文字（/api/emoji） |
+| `parts.ApiTokenSettings`・`ApiTokens` | API トークンの作成・失効と MCP のつなぎ方（/api/tokens。文言は props） |
+| `Rich.directive(lowlight, languages)` | v-html の後処理（コードブロックの色付け・連携したサービスのリンクの名前。`LinkTitles.start` で動かす） |
+| `Dom`・`Images`・`Formats` | DOM のイベント・コピー・ダウンロード・ファイル、アイコンの切り抜き、頭文字・バイト数 |
 
 ### OAuth の提供側（`sbirds.oauth`）
 
