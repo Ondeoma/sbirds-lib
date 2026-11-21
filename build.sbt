@@ -141,9 +141,10 @@ lazy val storage = (project in file("modules/storage"))
     )
   )
 
-// 兄弟のサービスとの OAuth 連携のトークンの保存
+// 兄弟のサービスとの OAuth 連携（トークンの保存・認可コードとの交換・失効）と、stui（チャット）への投稿
 lazy val links = (project in file("modules/links"))
   .settings(name := "sbirds-links")
+  .dependsOn(auth, db, net)
   .settings(commonTest)
   .settings(
     libraryDependencies ++= Seq(

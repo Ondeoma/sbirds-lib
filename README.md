@@ -30,7 +30,7 @@ lazy val libObserve = ProjectRef(sbirdsLib, "observe")
 | `push` | `sbirds.push` | Web Push（VAPID）による通知、購読の API（`PushRoutes`） |
 | `mail` | `sbirds.mail` | SMTP でのメールの送信 |
 | `storage` | `sbirds.storage` | S3 互換のオブジェクトストレージ |
-| `links` | `sbirds.links` | 兄弟のサービスとの OAuth 連携のトークンの保存 |
+| `links` | `sbirds.links` | 兄弟のサービスとの OAuth 連携（トークンの保存 `IntegrationTokenStore`・許可の画面への URL・コードとの交換・失効・トークンでの呼び出し `LinkClient`）、stui への投稿（DM・チャンネル・受信 Webhook `StuiClient`）、署名（HMAC-SHA256）付きの Webhook の送信（`Webhook`） |
 | `mcp` | `sbirds.mcp` | MCP のサーバーの枠: JSON-RPC の振り分け（`McpServer`）、ツールの定義（`McpTool`・`McpSchema`）、REST API の内部呼び出し（`McpCaller`） |
 | `devidp` | `sbirds.devidp` | 開発用の OIDC プロバイダ |
 | `web`（Scala.js） | `sbirds.web` | PWA・観測（RUM）・モーダル・ルートの補助・アプリの表示名（`AppNames`）、この端末の設定と画面の色（`LocalPrefs`・`ThemeSwitch`）、日時の表示（`Dates`）、`.st` の部品（`sbirds.web.parts`: `Modal`・`PushToggle`・`Combo`・`DialogHost`・`ToastHost`・`UserPicker` など） |
