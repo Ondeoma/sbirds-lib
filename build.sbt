@@ -1,6 +1,12 @@
 // sbirds シリーズ（skea・stui・sruru など）で共通に使う部品
 // 各サービスからは GitHub のリポジトリを直接参照する（ProjectRef(uri("https://github.com/Ondeoma/sbirds-lib.git#<タグ>"), "observe") など）
-ThisBuild / scalaVersion := "3.3.7"
+ThisBuild / scalaVersion := "3.9.0"
+// scalactive 0.7 が .st から作るコードは、Scala 3.9 で警告が出る（先頭の import の `X as _` と、implicit の渡し方）。
+// scalactive を直すまで、生成したファイルのこの 2 種類だけを黙らせる
+ThisBuild / scalacOptions ++= Seq(
+  "-Wconf:src=.*/src_managed/main/scalactive/.*&msg=unused import:s",
+  "-Wconf:src=.*/src_managed/main/scalactive/.*&msg=Implicit parameters should be provided with a `using` clause:s"
+)
 ThisBuild / organization := "io.github.ondeoma"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / licenses := List("MIT" -> url("https://opensource.org/licenses/MIT"))
