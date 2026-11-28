@@ -20,9 +20,9 @@ lazy val libObserve = ProjectRef(sbirdsLib, "observe")
 
 | ProjectRef の名前 | パッケージ | 中身 |
 |---|---|---|
-| `sharedJVM` / `sharedJS` | `sbirds.shared` | 日時（Timestamp）、エラーの応答（ErrorDto）、エラーコード（ErrorCode・AppError・LibErrorCode）、戻り先のパスの確認（SafePath） |
+| `sharedJVM` / `sharedJS` | `sbirds.shared` | 日時（Timestamp）、エラーの応答（ErrorDto）、エラーコード（ErrorCode・AppError・LibErrorCode）、戻り先のパスの確認（SafePath）、WebRTC の ICE サーバー（`IceServer`） |
 | `observe` | `sbirds.observe` | OpenTelemetry（ログ・メトリクス・トレース）、コード付きのログ（`Log.report`） |
-| `http` | `sbirds.http` | エラーの応答とログ（`Errors`）、IP ごとの回数の制限（`RateLimit`・`RateLimitConfig`）、環境変数（`Env`）、画面の配信（`Spa`）、ヘルスチェック（`Health`）、セキュリティのヘッダー（`SecurityHeaders`）、本文の上限（`BodyLimit`）、CSRF の確認（`Csrf`）、Routes の共通部分（`RouteHelpers`・`HttpParts`・`Cookies`）、セッションの Cookie（`SessionCookie`）、OIDC のログインの流れ（`OidcLoginFlow`） |
+| `http` | `sbirds.http` | エラーの応答とログ（`Errors`）、IP ごとの回数の制限（`RateLimit`・`RateLimitConfig`）、環境変数（`Env`）、画面の配信（`Spa`）、ヘルスチェック（`Health`）、セキュリティのヘッダー（`SecurityHeaders`）、本文の上限（`BodyLimit`）、CSRF の確認（`Csrf`）、Routes の共通部分（`RouteHelpers`・`HttpParts`・`Cookies`）、セッションの Cookie（`SessionCookie`）、OIDC のログインの流れ（`OidcLoginFlow`）、WebRTC の ICE・TURN の設定（`IceConfig`） |
 | `db` | `sbirds.db` | 接続のプールとマイグレーション（`Database`・`DbConfig`）、定期的な処理（`Periodic`）、送信待ちの表（`OutboxResult`・`Outbox`）、リース（`JobLock`）、SQL の部品（`Sql`）、ストアの共通部分（`TxStore`） |
 | `net` | `sbirds.net` | SSRF 対策: アドレスの判定表（`NetAddress`）、宛先の確認と、確かめた IP にそのままつなぐクライアント・ソケット（`NetGuard`） |
 | `auth` | `sbirds.auth` | OIDC のクライアント（署名の検証あり）、暗号（Crypto・ApiKeys・SecretBox）、アプリの表示名（`AppNames`） |
